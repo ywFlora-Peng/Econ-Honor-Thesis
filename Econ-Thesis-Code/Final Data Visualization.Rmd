@@ -1,0 +1,275 @@
+---
+title: "R Notebook"
+---
+
+```{r}
+library(readr)
+library(ggplot2)
+library(dplyr)
+library(tidyverse)
+library(tidyr)
+library(lvplot)
+library(stringr)
+library(kableExtra)
+library(data.table)
+library(sandwich)
+library(lmtest)
+library(jtools)
+library(ggthemes)
+library(huxtable)
+library(RColorBrewer)
+library(gt)
+```
+
+Import Data
+```{r}
+## Read the merged data of industry-level Execucomp and Annual Fundamentals
+
+Industry_1 = read.csv("Final Matching Dataset.csv")
+head(Industry_1)
+Industry_1
+```
+
+
+**Summary Statistics for Outcome Variable -- Direction Executive**
+
+Summary Table for Total/Current/Incentive Gender Compensation Gap
+```{r}
+## Total Compensation
+Industry_1 %>%
+  summarise(
+    Min = min(gap_totcomp, na.rm = TRUE),
+    Avg = mean(gap_totcomp, na.rm = TRUE),
+    Max = max(gap_totcomp, na.rm = TRUE),
+    `1st_Quantile` = quantile(gap_totcomp, 0.25, na.rm = TRUE),
+    `3rd_Quantile` = quantile(gap_totcomp, 0.75, na.rm = TRUE),
+    Std_Dev = sd(gap_totcomp, na.rm = TRUE)
+  )%>%
+  gt() %>%
+  fmt_number(decimals = 2)
+
+## Current Compensation
+Industry_1 %>%
+  summarise(
+    Min = min(gap_currcomp, na.rm = TRUE),
+    Avg = mean(gap_currcomp, na.rm = TRUE),
+    Max = max(gap_currcomp, na.rm = TRUE),
+    `1st_Quantile` = quantile(gap_currcomp, 0.25, na.rm = TRUE),
+    `3rd_Quantile` = quantile(gap_currcomp, 0.75, na.rm = TRUE),
+    Std_Dev = sd(gap_currcomp, na.rm = TRUE)
+  )%>%
+  gt() %>%
+  fmt_number(decimals = 2)
+
+
+## Incentive Compensation
+Industry_1 %>%
+  summarise(
+    Min = min(gap_incencomp, na.rm = TRUE),
+    Avg = mean(gap_incencomp, na.rm = TRUE),
+    Max = max(gap_incencomp, na.rm = TRUE),
+    `1st_Quantile` = quantile(gap_incencomp, 0.25, na.rm = TRUE),
+    `3rd_Quantile` = quantile(gap_incencomp, 0.75, na.rm = TRUE),
+    Std_Dev = sd(gap_incencomp, na.rm = TRUE)
+  )%>%
+  gt() %>%
+  fmt_number(decimals = 2)
+```
+
+Histogram of Outcome Variable "Total Compensation Gap"
+```{r}
+## To better display, only show distribution betwee 0.01-0.99 quantile
+lower <- quantile(Industry_1$gap_totcomp, 0.01, na.rm=T)
+upper <- quantile(Industry_1$gap_totcomp, 0.99, na.rm=T)
+
+Industry_1 %>%
+  ggplot(aes(x=gap_totcomp)) +
+  geom_histogram(fill=(brewer.pal(9, "Blues")[9]), color="black", bins=50) +
+  labs(title="Distribution of Average Total Industry Compensation Gap",
+       x="Total Compensation Gap",
+       y="Frequency") +
+  coord_cartesian(xlim = c(lower, upper)) +  
+  theme_stata(scheme = "s1color") +
+  scale_colour_stata(scheme = "s2color")+
+  theme(
+        title = element_text(hjust = 0.5,face="bold")
+        )
+```
+
+Trend of three compensation type's gap
+```{r}
+# Show the compensatioon gap over years for total compensation, current compensation, and incentive compensation
+
+Industry_1 %>%
+  group_by(year) %>%
+  summarize(
+    average_totalgap = mean(gap_totcomp, na.rm=T),
+    average_currgap = mean(gap_currcomp, na.rm=T),
+    average_incengap = mean(gap_incencomp, na.rm=T)
+  ) %>%
+  ggplot(aes(x=year)) +
+  geom_line(aes(y = average_totalgap, color = "Total Gap"), size = 1) +  
+  geom_line(aes(y = average_currgap, color = "Current Gap"), size = 1) +
+  geom_line(aes(y = average_incengap, color = "Incentive Gap"), size = 1) +
+  labs(
+    title = "Average Compensation Gap Trend: 2012-2022",
+    x = "Year",
+    y = "Average Compensation Gap between Genders",
+    colour = ""
+  ) +
+  theme_stata(scheme = "s1color") +
+  scale_colour_stata(scheme = "s2color") + 
+  scale_shape_stata() +
+  theme(axis.title = element_text(face = "bold"),
+        panel.grid.minor = element_blank(),
+        title = element_text(hjust = 0.5, face="bold"))+
+        scale_x_continuous(breaks = seq(min(Industry_1$year), max(Industry_1$year), by = 1))
+```
+
+Summary Statistics for Executive Compensation Gap by Industry & Sector
+```{r}
+Industry_1 %>%
+  group_by(ind2dig) %>%
+  summarize(
+    mean_totgap = mean(gap_totcomp, na.rm=T), 
+    mean_currgap = mean(gap_currcomp, na.rm=T),
+    mean_incengap = mean(gap_incencomp, na.rm=T)
+  ) %>%
+  gt()%>%
+  fmt_number(decimals = 2)
+
+Industry_1 %>%
+  group_by(sector) %>%
+  summarize(
+    mean_totgap = mean(gap_totcomp, na.rm=T), 
+    mean_currgap = mean(gap_currcomp, na.rm=T),
+    mean_incengap = mean(gap_incencomp, na.rm=T)
+  ) %>%
+  gt()%>%
+  fmt_number(decimals = 2)
+```
+
+**Summary Statistics for Outcome Variable -- Gender Wage Gap**
+```{r}
+## Gender Wage Gap (ln)
+Industry_1 %>%
+  summarise(
+    Min = min(lgapearn, na.rm = TRUE),
+    Avg = mean(lgapearn, na.rm = TRUE),
+    Max = max(lgapearn, na.rm = TRUE),
+    `1st_Quantile` = quantile(lgapearn, 0.25, na.rm = TRUE),
+    `3rd_Quantile` = quantile(lgapearn, 0.75, na.rm = TRUE),
+    Std_Dev = sd(lgapearn, na.rm = TRUE)
+  )%>%
+  gt() %>%
+  fmt_number(decimals = 2)
+```
+
+
+Histogram of Outcome Variable- non-managerial labor wage gap (ln)
+```{r}
+## To better display, only show distribution betwee 0.01-0.99 quantile
+lower_earn <- quantile(Industry_1$lgapearn, 0.01, na.rm=T)
+upper_earn <- quantile(Industry_1$lgapearn, 0.99, na.rm=T)
+
+ggplot(Industry_1, aes(x=lgapearn)) +
+  geom_histogram(fill=brewer.pal(9, "Blues")[9], color="black", bins=50) +
+  labs(title="Distribution of Industry Gender Wage Gap",
+       x="Log of Wage Gap",
+       y="Frequency") +
+  coord_cartesian(xlim = c(lower_earn, upper_earn)) +
+  theme_stata(scheme = "s1color") +
+  scale_colour_stata(scheme = "s2color")+
+  theme(
+        title = element_text(hjust = 0.5,face="bold")
+        )
+```
+
+Summary Statistics for Gender Wage Gap by Industry & Sector
+```{r}
+Industry_1 %>%
+  group_by(ind2dig) %>%
+  summarize(
+    earn_gap = mean(lgapearn, na.rm=T)
+  ) %>%
+  gt()%>%
+  fmt_number(decimals = 2)
+
+earn_gap = Industry_1 %>%
+  group_by(sector) %>%
+  summarize(
+    earn_gap = mean(lgapearn, na.rm=T)
+  )
+
+
+ggplot(earn_gap, aes(x=reorder(sector, -earn_gap), y=earn_gap)) +
+  geom_bar(stat="identity", fill="steelblue") +
+  coord_flip() +
+  labs(title="Distribution of Industry Gender Wage Gap",
+       x="Sector",
+       y="Log of Wage Gap") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face="bold"),
+        axis.text.x = element_text(size=10),  # Adjust text size as needed
+        axis.text.y = element_text(size=10))
+```
+
+
+**Summary Statistics for Treatment Variable -- Female CEO Share**
+Summary Statistics for male and female share:
+```{r}
+## Summary of female CEO share by sector
+Industry_1 %>%
+  group_by(sector) %>%
+  summarise(
+    Min = min(share_ceo, na.rm = TRUE),
+    Avg = mean(share_ceo, na.rm = TRUE),
+    Max = max(share_ceo, na.rm = TRUE),
+    `1st_Quantile` = quantile(share_ceo, 0.25, na.rm = TRUE),
+    `3rd_Quantile` = quantile(share_ceo, 0.75, na.rm = TRUE),
+    Std_Dev = sd(share_ceo, na.rm = TRUE),
+    Num_NA = sum(is.na(share_ceo))
+  ) %>%
+  gt() %>%
+  fmt_number(decimals = 4)
+
+## Boxplot visualization
+CEOshare = Industry_1 %>%
+  group_by(sector) %>%
+  summarise(
+    Min = min(share_ceo, na.rm = TRUE),
+    Avg = mean(share_ceo, na.rm = TRUE),
+    Max = max(share_ceo, na.rm = TRUE),
+    first_Quantile = quantile(share_ceo, 0.25, na.rm = TRUE),
+    thrid_Quantile = quantile(share_ceo, 0.75, na.rm = TRUE),
+    Std_Dev = sd(share_ceo, na.rm = TRUE),
+    Num_NA = sum(is.na(share_ceo))
+  ) 
+
+ggplot(CEOshare, aes(x=reorder(sector, -Avg), y=Avg)) +
+  geom_boxplot(aes(lower=first_Quantile, upper=thrid_Quantile, middle=Avg, ymin=Min, ymax=Max), stat="identity", fill="lightblue") +
+  coord_flip() +
+  labs(title="Summary Statistics of Industry Female CEO Share",
+       x="Industry Sector",
+       y="Female CEO Share") +
+  theme_minimal() +
+  theme(plot.title = element_text(face="bold", hjust = 0.5),
+        axis.title.x = element_text(face="bold"),
+        axis.title.y = element_text(face="bold"),
+        axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+Distribution plot (Histogram) of female executive share
+```{r}
+Industry_1 %>%
+  ggplot(aes(x=share_ceo)) +
+  geom_histogram(fill=(brewer.pal(9, "Blues")[9]), color="black", bins=50) +
+  labs(title="Distribution of Industry's Female CEO Share",
+       x="Female CEO Share",
+       y="Frequency") +
+  theme_stata(scheme = "s1color") +
+  scale_colour_stata(scheme = "s2color")+
+  theme(
+        title = element_text(hjust = 0.5,face="bold")
+        )
+```
